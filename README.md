@@ -4,4 +4,6 @@ A program made for the game [Path of Exile](https://www.pathofexile.com) that au
 
 ## How do I find my session ID?
 
+!! DO NOT SHARE YOUR SESSION ID !!
+
 Access the [game's website](https://www.pathofexile.com) while logged in your account. This should be stored in your cookies as POESESSID. How to find your cookies depends on your browser.
