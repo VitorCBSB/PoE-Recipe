@@ -5,7 +5,7 @@ module Main where
 
 import Network.Wreq
 import Control.Lens
-import Control.Monad (void, when)
+import Control.Monad (void, unless)
 import Data.Aeson hiding (Options)
 import Data.Aeson.Lens (_String, key)
 import Data.Monoid ((<>))
@@ -71,8 +71,8 @@ main = do
       do  putStrLn "Fetching items from your stash."
           qItems <- getQualityTabItems conf
           let (noQ, qs) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
-          mapM_ (putStrLn . show) qs
-          when (not $ null qs) $
+          mapM_ print qs
+          unless (null qs) $
             do  putStrLn "Some items are missing quality:"
                 mapM_ (putStrLn . T.unpack) noQ
           putStrLn ""
@@ -103,7 +103,7 @@ getQualityTabItems config =
 
 itemIsGem :: Item -> Bool
 itemIsGem item =
-  "socket" `T.isInfixOf` (descrText item)
+  "socket" `T.isInfixOf` descrText item
 
 findCorrectTabIndex :: T.Text -> Stash -> Either T.Text Int
 findCorrectTabIndex name stash =
