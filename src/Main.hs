@@ -5,7 +5,7 @@ module Main where
 
 import Network.Wreq
 import Control.Lens
-import Control.Monad (when)
+import Control.Monad (void, when)
 import Data.Aeson hiding (Options)
 import Data.Aeson.Lens (_String, key)
 import Data.Monoid ((<>))
@@ -75,6 +75,9 @@ main = do
           when (not $ null qs) $
             do  putStrLn "Some items are missing quality:"
                 mapM_ (putStrLn . T.unpack) noQ
+          putStrLn ""
+          putStrLn "Press Enter to exit..."
+          void getChar
 
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json" 
