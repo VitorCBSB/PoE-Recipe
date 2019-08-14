@@ -15,7 +15,7 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.List (find, isInfixOf)
+import Data.List (find, isInfixOf, (\\))
 import GHC.Generics
 import Text.Parsec
 import Text.Parsec.Text (Parser)
@@ -71,9 +71,14 @@ main = do
       do  putStrLn "Fetching items from your stash."
           qItems <- getQualityTabItems conf
           let (noQ, qs) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
-          mapM_ print qs
+          putStrLn "The following combinations result in exactly one GCP each:"
+          let (sets, out) = qualities qs
+          mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] sets
+          putStr "Items left out: "
+          print out
+          putStrLn ""
           unless (null noQ) $
-            do  putStrLn "Some items are missing quality:"
+            do  putStrLn "The following items have no quality:"
                 mapM_ (putStrLn . T.unpack) noQ
           putStrLn ""
           putStrLn "Press Enter to exit..."
@@ -142,3 +147,27 @@ parseQuality =
       qual <- read <$> many1 digit
       char '%'
       return qual
+
+subsum w = snd . head . filter ((==w) . fst) . (++[(w,[])]) . foldl s [(0,[])]
+  where
+  s a x = merge a $ map f a 
+    where
+      f (a,l) = (a + x, l ++ [x])
+
+  -- keep list of sums sorted and unique
+  merge [] a = a
+  merge a [] = a
+  merge a@((av,al):as) b@((bv,bl):bs)
+    | av <  bv  = (av,al) : merge as b
+    | av == bv  = (bv,bl) : merge as bs
+    | otherwise = (bv,bl) : merge a bs
+ 
+qualities items =
+  let set = subsum 40 items
+  in
+    if set == [] then
+      ([], items)
+    else
+      let (sset, sitems) = qualities (items \\ set)
+      in
+        (set : sset, sitems)
