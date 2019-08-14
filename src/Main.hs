@@ -72,7 +72,7 @@ main = do
           qItems <- getQualityTabItems conf
           let (noQ, qs) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
           mapM_ print qs
-          unless (null qs) $
+          unless (null noQ) $
             do  putStrLn "Some items are missing quality:"
                 mapM_ (putStrLn . T.unpack) noQ
           putStrLn ""
