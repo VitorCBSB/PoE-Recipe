@@ -70,16 +70,25 @@ main = do
     Right conf -> 
       do  putStrLn "Fetching items from your stash."
           qItems <- getQualityTabItems conf
-          let (noQ, qs) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
-          putStrLn "The following combinations result in exactly one GCP each:"
-          let (sets, out) = qualities qs
-          mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] sets
-          putStr "Items left out: "
-          print out
-          putStrLn ""
-          unless (null noQ) $
+          let (noQG, qsG) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
+          let (noQF, qsF) = partitionEithers $ map getItemQuality $ filter itemIsFlask qItems
+          unless (null qsG) $
+            do  putStrLn "The following combinations result in exactly one GCP each:"
+                let (setsG, outG) = qualities qsG
+                mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] setsG
+                putStr "Items left out: "
+                print outG
+                putStrLn ""
+          unless (null qsF) $
+            do  putStrLn "The following combinations result in exactly one Glassblower each:"
+                let (setsF, outF) = qualities qsF
+                mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] setsF
+                putStr "Items left out: "
+                print outF
+                putStrLn ""
+          unless (null (noQG ++ noQF)) $
             do  putStrLn "The following items have no quality:"
-                mapM_ (putStrLn . T.unpack) noQ
+                mapM_ (putStrLn . T.unpack) (noQG ++ noQF)
           putStrLn ""
           putStrLn "Press Enter to exit..."
           void getChar
@@ -109,6 +118,10 @@ getQualityTabItems config =
 itemIsGem :: Item -> Bool
 itemIsGem item =
   "socket" `T.isInfixOf` descrText item
+
+itemIsFlask :: Item -> Bool
+itemIsFlask item =
+  "Flask" `T.isInfixOf` typeLine item
 
 findCorrectTabIndex :: T.Text -> Stash -> Either T.Text Int
 findCorrectTabIndex name stash =
