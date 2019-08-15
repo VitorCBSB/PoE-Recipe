@@ -1,5 +1,7 @@
 # PoE-Recipe
 
+![](usage.gif)
+
 A program made for the game [Path of Exile](https://www.pathofexile.com) that automatically fetches information from your stash to calculate optimal vendor recipes for skill gems.
 
 ## How do I find my session ID?
