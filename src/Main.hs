@@ -178,11 +178,9 @@ subsum w = snd . head . filter ((==w) . fst) . (++[(w,[])]) . foldl s [(0,[])]
  
 qualities :: [Int] -> ([[Int]], [Int])
 qualities items =
-  let set = subsum 40 items
-  in
-    if null set then
-      ([], items)
-    else
+  case subsum 40 items of
+    [] -> ([], items)
+    set -> 
       let (sset, sitems) = qualities (items \\ set)
       in
         (set : sset, sitems)
