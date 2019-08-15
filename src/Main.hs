@@ -161,6 +161,7 @@ parseQuality =
       char '%'
       return qual
 
+subsum :: Int -> [Int] -> [Int]
 subsum w = snd . head . filter ((==w) . fst) . (++[(w,[])]) . foldl s [(0,[])]
   where
   s a x = merge a $ map f a 
@@ -175,10 +176,11 @@ subsum w = snd . head . filter ((==w) . fst) . (++[(w,[])]) . foldl s [(0,[])]
     | av == bv  = (bv,bl) : merge as bs
     | otherwise = (bv,bl) : merge a bs
  
+qualities :: [Int] -> ([[Int]], [Int])
 qualities items =
   let set = subsum 40 items
   in
-    if set == [] then
+    if null set then
       ([], items)
     else
       let (sset, sitems) = qualities (items \\ set)
