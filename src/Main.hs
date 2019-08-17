@@ -9,7 +9,7 @@ import Control.Monad (void, unless)
 import Data.Aeson hiding (Options)
 import Data.Aeson.Lens (_String, key)
 import Data.Monoid ((<>))
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Either (partitionEithers)
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
@@ -46,9 +46,9 @@ data Tab = Tab
   } deriving (Generic, Show)
 
 data Item = Item
-  { descrText :: T.Text
+  { descrText :: Maybe T.Text
   , typeLine :: T.Text
-  , properties :: [Property]
+  , properties :: Maybe [Property]
   } deriving (Generic, Show)
 
 data Property = Property
@@ -117,7 +117,7 @@ getQualityTabItems config =
 
 itemIsGem :: Item -> Bool
 itemIsGem item =
-  "socket" `T.isInfixOf` descrText item
+  maybe False ("socket" `T.isInfixOf`) (descrText item)
 
 itemIsFlask :: Item -> Bool
 itemIsFlask item =
@@ -140,7 +140,7 @@ getItemQuality item =
         Left e -> Left $ "Could not parse quality '" <> fst (Prelude.head (values prop)) <> "' of item '" <> typeLine item <> "'."
         Right qual -> Right qual
   where
-    allProps = properties item
+    allProps = fromMaybe [] (properties item)
 
 url :: String
 url = "https://www.pathofexile.com/character-window/get-stash-items"
