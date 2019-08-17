@@ -7,12 +7,10 @@ import Network.Wreq
 import Control.Lens
 import Control.Monad (void, unless)
 import Data.Aeson hiding (Options)
-import Data.Aeson.Lens (_String, key)
 import Data.Monoid ((<>))
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Either (partitionEithers)
-import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict
+import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8)
@@ -159,7 +157,7 @@ getItemQuality item =
 url :: String
 url = "https://www.pathofexile.com/character-window/get-stash-items"
 
-params :: T.Text -> T.Text -> T.Text -> Strict.ByteString -> Options
+params :: T.Text -> T.Text -> T.Text -> B.ByteString -> Options
 params accountName leagueName tabIdx sessId =
   defaults & param "accountName" .~ [accountName]
            & param "tabIndex" .~ [tabIdx]
