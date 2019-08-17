@@ -14,6 +14,7 @@ import Data.Either (partitionEithers)
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8)
 import Data.List (find, isInfixOf, (\\))
 import GHC.Generics
@@ -56,6 +57,11 @@ data Property = Property
   , values :: [(T.Text, Int)]
   } deriving (Generic, Show)
 
+data ItemType =
+  Gem
+  | Flask
+  | Map
+
 instance FromJSON Stash
 instance FromJSON Tab
 instance FromJSON Item
@@ -70,28 +76,30 @@ main = do
     Right conf -> 
       do  putStrLn "Fetching items from your stash."
           qItems <- getQualityTabItems conf
-          let (noQG, qsG) = partitionEithers $ map getItemQuality $ filter itemIsGem qItems
-          let (noQF, qsF) = partitionEithers $ map getItemQuality $ filter itemIsFlask qItems
-          unless (null qsG) $
-            do  putStrLn "The following combinations result in exactly one GCP each:"
-                let (setsG, outG) = qualities qsG
-                mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] setsG
-                putStr "Items left out: "
-                print outG
-                putStrLn ""
-          unless (null qsF) $
-            do  putStrLn "The following combinations result in exactly one Glassblower each:"
-                let (setsF, outF) = qualities qsF
-                mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] setsF
-                putStr "Items left out: "
-                print outF
-                putStrLn ""
-          unless (null (noQG ++ noQF)) $
+          noQG <- printQualities Gem qItems
+          noQF <- printQualities Flask qItems
+          noQM <- printQualities Map qItems
+          unless (null (noQG ++ noQF ++ noQM)) $
             do  putStrLn "The following items have no quality:"
-                mapM_ (putStrLn . T.unpack) (noQG ++ noQF)
+                mapM_ TIO.putStrLn (noQG ++ noQF ++ noQM)
           putStrLn ""
           putStrLn "Press Enter to exit..."
           void getChar
+
+-- Returns no quality items so they can be logged at the end
+printQualities :: ItemType -> [Item] -> IO [T.Text] 
+printQualities itemType allItems =
+  do  let (noQ, qs) = partitionEithers $ map getItemQuality $ filter (itemDeterminer itemType) allItems
+      if null qs then
+        return []
+      else
+        do  TIO.putStrLn $ "The following combinations result in exactly one " <> qualityCurrency itemType <> " each:"
+            let (sets, out) = qualities qs
+            mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] sets
+            putStr "Items left out: "
+            print out
+            putStrLn ""
+            return noQ
 
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json" 
@@ -115,12 +123,30 @@ getQualityTabItems config =
           do  qualStash <- requestStash (Acc $ accountName config) (L $ league config) (TI $ (T.pack . show) idx) (SI $ sessId config)
               return $ items qualStash
 
+itemDeterminer :: ItemType -> (Item -> Bool)
+itemDeterminer itemType =
+  case itemType of
+    Gem -> maybe False ("socket" `T.isInfixOf`) . descrText
+    Flask -> \item -> "Flask" `T.isInfixOf` typeLine item
+    Map -> \item -> "Map" `T.isInfixOf` typeLine item
+
+qualityCurrency :: ItemType -> T.Text
+qualityCurrency itemType =
+  case itemType of
+    Gem -> "GCP"
+    Flask -> "Glassblower"
+    Map -> "Chisel"
+
 itemIsGem :: Item -> Bool
 itemIsGem item =
   maybe False ("socket" `T.isInfixOf`) (descrText item)
 
 itemIsFlask :: Item -> Bool
 itemIsFlask item =
+  "Flask" `T.isInfixOf` typeLine item
+
+itemIsMap :: Item -> Bool
+itemIsMap item =
   "Flask" `T.isInfixOf` typeLine item
 
 findCorrectTabIndex :: T.Text -> Stash -> Either T.Text Int
