@@ -137,18 +137,6 @@ qualityCurrency itemType =
     Flask -> "Glassblower"
     Map -> "Chisel"
 
-itemIsGem :: Item -> Bool
-itemIsGem item =
-  maybe False ("socket" `T.isInfixOf`) (descrText item)
-
-itemIsFlask :: Item -> Bool
-itemIsFlask item =
-  "Flask" `T.isInfixOf` typeLine item
-
-itemIsMap :: Item -> Bool
-itemIsMap item =
-  "Flask" `T.isInfixOf` typeLine item
-
 findCorrectTabIndex :: T.Text -> Stash -> Either T.Text Int
 findCorrectTabIndex name stash =
   case Data.List.find (\t -> n t == name) allTabs of
