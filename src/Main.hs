@@ -148,8 +148,8 @@ getItemQuality item =
   case Data.List.find (\p -> name p == "Quality") allProps of
     Nothing -> Left $ "Item '" <> typeLine item <> "' has no quality."
     Just prop -> 
-      case parse parseQuality "" ((fst . Prelude.head) (values prop)) of
-        Left e -> Left $ "Could not parse quality '" <> fst (Prelude.head (values prop)) <> "' of item '" <> typeLine item <> "'."
+      case parse parseQuality "" ((fst . head) (values prop)) of
+        Left e -> Left $ "Could not parse quality '" <> fst (head (values prop)) <> "' of item '" <> typeLine item <> "'."
         Right qual -> Right qual
   where
     allProps = fromMaybe [] (properties item)
