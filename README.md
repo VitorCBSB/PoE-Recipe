@@ -6,7 +6,7 @@ A program made for the game [Path of Exile](https://www.pathofexile.com) that au
 
 ## How do I use this?
 
-With the files at hand [(check the releases for the latest version)](https://github.com/VitorCBSB/PoE-Recipe/releases), edit the .json file so each field corresponds to:
+With the files in hand [(check the releases for the latest version)](https://github.com/VitorCBSB/PoE-Recipe/releases), edit the .json file so each field corresponds to:
 
 - accountName: your account's name.
 - stashTabName: the name of your stash tab containing quality items you wish to vendor. This includes gems, flasks and maps.
