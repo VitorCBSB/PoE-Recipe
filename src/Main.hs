@@ -14,7 +14,7 @@ import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8)
-import Data.List (find, isInfixOf, (\\))
+import Data.List (find, isInfixOf, partition, (\\))
 import GHC.Generics
 import Text.Parsec
 import Text.Parsec.Text (Parser)
@@ -85,19 +85,23 @@ main = do
           void getChar
 
 -- Returns no quality items so they can be logged at the end
+-- If no quality items of that particular type are found,
+-- ignore the no quality ones.
 printQualities :: ItemType -> [Item] -> IO [T.Text] 
 printQualities itemType allItems =
-  do  let (noQ, qs) = partitionEithers $ map getItemQuality $ filter (itemDeterminer itemType) allItems
-      if null qs then
-        return []
-      else
-        do  TIO.putStrLn $ "The following combinations result in exactly one " <> qualityCurrency itemType <> " each:"
-            let (sets, out) = qualities qs
-            mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] sets
-            putStr "Items left out: "
-            print out
-            putStrLn ""
-            return noQ
+  if null qs then
+    return []
+  else
+    do  TIO.putStrLn $ "The following combinations result in exactly one " <> qualityCurrency itemType <> " each:"
+        let (sets, out) = qualities trueQs
+        mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] (map (:[]) twentyQs ++ sets)
+        putStr "Items left out: "
+        print out
+        putStrLn ""
+        return noQ
+  where
+    (noQ, qs) = partitionEithers $ map getItemQuality $ filter (itemDeterminer itemType) allItems
+    (twentyQs, trueQs) = partition (>= 20) qs
 
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json" 
