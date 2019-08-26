@@ -84,7 +84,7 @@ main = do
               unless (null (noQG ++ noQF ++ noQM)) $
                 do  putStrLn "The following items have no quality:"
                     mapM_ TIO.putStrLn (noQG ++ noQF ++ noQM)
-              putStrLn ""
+  putStrLn ""
   putStrLn "Press Enter to exit..."
   void getChar
 
@@ -117,7 +117,8 @@ requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) =
         Nothing -> return $ Left "Could not fetch stash."
         Just body -> 
           case eitherDecode body of
-            Left e -> return $ Left $ "Stash was fetched, but could not be parsed: " <> T.pack e
+            Left e -> return $ Left $ 
+              "Stash could not be parsed: " <> T.pack e <> "\n\nIs your config.json correctly configured?"
             Right stash -> return (Right stash)
 
 getQualityTabItems :: Config -> IO (Either T.Text [Item])
@@ -178,6 +179,7 @@ params accountName leagueName tabIdx sessId =
            & param "tabs" .~ ["1"]
            & header "Cookie" .~ ["POESESSID=" <> sessId]
            & header "Referer" .~ ["https://www.pathofexile.com"]
+           & checkResponse .~ (Just $ \_ _ -> return ())
 
 parseQuality :: Parser Int
 parseQuality =
