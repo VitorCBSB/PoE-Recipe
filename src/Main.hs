@@ -96,7 +96,7 @@ printQualities itemType allItems =
   if null qs then
     return []
   else
-    do  TIO.putStrLn $ "The following combinations result in exactly one " <> qualityCurrency itemType <> " each:"
+    do  TIO.putStrLn $ qualityCurrency itemType <> " combinations:"
         let (sets, out) = qualities trueQs
         mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show is) $ zip [1..] (map (:[]) twentyQs ++ sets)
         putStr "Items left out: "
@@ -117,7 +117,7 @@ requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) =
         Nothing -> return $ Left "Could not fetch stash."
         Just body -> 
           case eitherDecode body of
-            Left e -> return $ Left $ "Stash was fetched, but could not be parsed: " <> (T.pack e)
+            Left e -> return $ Left $ "Stash was fetched, but could not be parsed: " <> T.pack e
             Right stash -> return (Right stash)
 
 getQualityTabItems :: Config -> IO (Either T.Text [Item])
