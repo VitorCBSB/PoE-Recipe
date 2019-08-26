@@ -13,6 +13,8 @@ With the files at hand [(check the releases for the latest version)](https://git
 - league: the current league's name (as of this commit, Legion).
 - sessId: your session ID.
 
+After that, and with both the .exe and the .json file in the same directory, just double click the executable as you would any other program. It should run just like the .gif above shows.
+
 ## How do I find my session ID?
 
 !! DO NOT SHARE YOUR SESSION ID WITH ANYONE !!
