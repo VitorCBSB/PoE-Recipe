@@ -16,6 +16,7 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8)
 import Data.List (find, isInfixOf, partition, (\\))
 import GHC.Generics
+import System.IO (stderr, hPutStrLn)
 import Text.Parsec
 import Text.Parsec.Text (Parser)
 
@@ -70,19 +71,22 @@ main = do
   putStrLn "Reading config."
   maybeConf <- readConfig
   case maybeConf of
-    Left e -> error $ "Could not read config: " <> e
+    Left e -> hPutStrLn stderr $ "Could not read config: " <> e
     Right conf -> 
       do  putStrLn "Fetching items from your stash."
-          qItems <- getQualityTabItems conf
-          noQG <- printQualities Gem qItems
-          noQF <- printQualities Flask qItems
-          noQM <- printQualities Map qItems
-          unless (null (noQG ++ noQF ++ noQM)) $
-            do  putStrLn "The following items have no quality:"
-                mapM_ TIO.putStrLn (noQG ++ noQF ++ noQM)
-          putStrLn ""
-          putStrLn "Press Enter to exit..."
-          void getChar
+          maybeQItems <- getQualityTabItems conf
+          case maybeQItems of
+            Left e -> TIO.hPutStrLn stderr $ "Error while retrieving items from stash: " <> e
+            Right qItems -> do
+              noQG <- printQualities Gem qItems
+              noQF <- printQualities Flask qItems
+              noQM <- printQualities Map qItems
+              unless (null (noQG ++ noQF ++ noQM)) $
+                do  putStrLn "The following items have no quality:"
+                    mapM_ TIO.putStrLn (noQG ++ noQF ++ noQM)
+              putStrLn ""
+  putStrLn "Press Enter to exit..."
+  void getChar
 
 -- Returns no quality items so they can be logged at the end
 -- If no quality items of that particular type are found,
@@ -106,24 +110,29 @@ printQualities itemType allItems =
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json" 
 
-requestStash :: Account -> League -> TabIdx -> SessId -> IO Stash
+requestStash :: Account -> League -> TabIdx -> SessId -> IO (Either T.Text Stash)
 requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) = 
   do  r <- getWith (Main.params acc league_ tabIdx (encodeUtf8 sessId_)) url
       case r ^? responseBody of
-        Nothing -> error "Could not fetch stash."
+        Nothing -> return $ Left "Could not fetch stash."
         Just body -> 
           case eitherDecode body of
-            Left e -> error $ "Stash was fetched, but could not be parsed: " <> e
-            Right stash -> return stash
+            Left e -> return $ Left $ "Stash was fetched, but could not be parsed: " <> (T.pack e)
+            Right stash -> return (Right stash)
 
-getQualityTabItems :: Config -> IO [Item]
+getQualityTabItems :: Config -> IO (Either T.Text [Item])
 getQualityTabItems config =
   do  initStash <- requestStash (Acc $ accountName config) (L $ league config) (TI "0") (SI $ sessId config)
-      case findCorrectTabIndex (stashTabName config) initStash of
-        Left e -> error (T.unpack e)
-        Right idx -> 
-          do  qualStash <- requestStash (Acc $ accountName config) (L $ league config) (TI $ (T.pack . show) idx) (SI $ sessId config)
-              return $ items qualStash
+      case initStash of
+        Left e -> return $ Left e
+        Right iniStash ->
+          case findCorrectTabIndex (stashTabName config) iniStash of
+            Left e -> return $ Left e
+            Right idx -> 
+              do  qualStash <- requestStash (Acc $ accountName config) (L $ league config) (TI $ (T.pack . show) idx) (SI $ sessId config)
+                  case qualStash of
+                    Left e -> return $ Left e
+                    Right qualityStash -> return $ Right $ items qualityStash
 
 itemDeterminer :: ItemType -> (Item -> Bool)
 itemDeterminer itemType =
