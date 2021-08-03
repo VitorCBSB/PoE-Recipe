@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Lens
+import Control.Lens ((&), (.~), (?~), (^?))
 import Control.Monad (unless, void)
 import Data.Aeson
   ( FromJSON,
@@ -31,6 +31,7 @@ import Network.Wreq
 import System.IO (hPutStrLn, stderr)
 import Text.Parsec (char, digit, many1, parse)
 import Text.Parsec.Text (Parser)
+import Prelude hiding (error)
 
 data Config = Config
   { accountName :: T.Text,
@@ -81,6 +82,17 @@ data ItemType
   | Flask
   | Map
 
+data Error = Error
+  { error :: ErrorMessage
+  }
+  deriving (Generic, Show)
+
+data ErrorMessage = ErrorMessage
+  { code :: Int,
+    message :: T.Text
+  }
+  deriving (Generic, Show)
+
 instance FromJSON Stash
 
 instance FromJSON Tab
@@ -88,6 +100,10 @@ instance FromJSON Tab
 instance FromJSON Item
 
 instance FromJSON Property
+
+instance FromJSON Error
+
+instance FromJSON ErrorMessage
 
 main :: IO ()
 main = do
@@ -143,10 +159,13 @@ requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) =
       Nothing -> return $ Left "Could not fetch stash."
       Just body ->
         case eitherDecode body of
-          Left e ->
-            return $
-              Left $
-                "Stash could not be parsed: " <> T.pack e <> "\n\nIs your config.json correctly configured?"
+          Left _ ->
+            let errorMess =
+                  case eitherDecode body of
+                    Left e -> "Unknown error: " <> T.pack e <> ". Is your config.json correctly configured?"
+                    Right err -> (message . error) err
+                advice = "\n\nIt's possible your POESESSID is outdated. Try grabbing a new one and trying again."
+             in return (Left $ "Stash could not be parsed: " <> errorMess <> advice)
           Right stash -> return (Right stash)
 
 getQualityTabItems :: Config -> IO (Either T.Text [Item])
