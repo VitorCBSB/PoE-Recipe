@@ -11,9 +11,9 @@ import Data.Aeson
     eitherDecodeFileStrict',
   )
 import qualified Data.ByteString as B
-import Data.Either (partitionEithers, isLeft, rights)
+import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.List (find, isInfixOf, partition, sort, sortBy, (\\))
+import Data.List (find, isInfixOf, partition, sort, (\\))
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
@@ -167,7 +167,7 @@ printQualities itemType allItems =
     (noQ, qs) = partitionQuality $ filter (itemDeterminer itemType) allItems
     (twentyQs, trueQs) = partition (\i -> fst i >= 20) qs
 
--- Returns a tuple with: (items with quality, items without quality)
+-- Returns a tuple with: (items without quality, items with quality)
 partitionQuality :: [Item] -> ([Item], [(Int, Item)])
 partitionQuality items =
   (noQ, qs)
