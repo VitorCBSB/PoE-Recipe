@@ -11,9 +11,10 @@ import Data.Aeson
     eitherDecodeFileStrict',
   )
 import qualified Data.ByteString as B
-import Data.Either (partitionEithers)
-import Data.List (find, isInfixOf, partition, sort, (\\))
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Either (partitionEithers, isLeft, rights)
+import Data.Function (on)
+import Data.List (find, isInfixOf, partition, sort, sortBy, (\\))
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -74,18 +75,26 @@ data Tab = Tab
   }
   deriving (Generic, Show)
 
+newtype URL = U T.Text
+  deriving (Generic, Show, Eq)
+
+instance FromJSON URL
+
 data Item = Item
   { descrText :: Maybe T.Text,
     typeLine :: T.Text,
-    properties :: Maybe [Property]
+    properties :: Maybe [Property],
+    x :: Int,
+    y :: Int,
+    icon :: URL
   }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 data Property = Property
   { name :: T.Text,
     values :: [(T.Text, Int)]
   }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 data ItemType
   = Gem
@@ -134,7 +143,7 @@ main = do
             unless (null (noQG ++ noQF ++ noQM)) $
               do
                 putStrLn "The following items have no quality:"
-                mapM_ TIO.putStrLn (noQG ++ noQF ++ noQM)
+                mapM_ (TIO.putStrLn . typeLine) (noQG ++ noQF ++ noQM)
   putStrLn ""
   putStrLn "Press Enter to exit..."
   void getChar
@@ -142,21 +151,32 @@ main = do
 -- Returns no quality items so they can be logged at the end
 -- If no quality items of that particular type are found,
 -- ignore the no quality ones.
-printQualities :: ItemType -> [Item] -> IO [T.Text]
+printQualities :: ItemType -> [Item] -> IO [Item]
 printQualities itemType allItems =
   if null qs
     then return []
     else do
       TIO.putStrLn $ qualityCurrency itemType <> " combinations:"
       let (sets, out) = qualities trueQs
-      mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show (sort is)) $ zip [1 ..] (map (: []) twentyQs ++ sets)
+      mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show (sort $ map fst is)) $ zip [1 ..] (map (: []) twentyQs ++ sets)
       putStr "Items left out: "
-      print (sort out)
+      print (sort $ map fst out)
       putStrLn ""
       return noQ
   where
-    (noQ, qs) = partitionEithers $ map getItemQuality $ filter (itemDeterminer itemType) allItems
-    (twentyQs, trueQs) = partition (>= 20) qs
+    (noQ, qs) = partitionQuality $ filter (itemDeterminer itemType) allItems
+    (twentyQs, trueQs) = partition (\i -> fst i >= 20) qs
+
+-- Returns a tuple with: (items with quality, items without quality)
+partitionQuality :: [Item] -> ([Item], [(Int, Item)])
+partitionQuality items =
+  (noQ, qs)
+  where
+    (noQ, qs) = partitionEithers $ map qualityCheck items
+    qualityCheck item =
+      case getItemQuality item of
+        Nothing -> Left item
+        Just q -> Right (q, item)
 
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json"
@@ -222,14 +242,14 @@ findCorrectTabIndex name stash =
   where
     allTabs = tabs stash
 
-getItemQuality :: Item -> Either T.Text Int
+getItemQuality :: Item -> Maybe Int
 getItemQuality item =
   case Data.List.find (\p -> name p == "Quality") allProps of
-    Nothing -> Left $ "Item '" <> typeLine item <> "' has no quality."
+    Nothing -> Nothing
     Just prop ->
       case parse parseQuality "" ((fst . head) (values prop)) of
-        Left e -> Left $ "Could not parse quality '" <> fst (head (values prop)) <> "' of item '" <> typeLine item <> "'."
-        Right qual -> Right qual
+        Left e -> Nothing
+        Right qual -> Just qual
   where
     allProps = fromMaybe [] (properties item)
 
@@ -269,10 +289,12 @@ subsum w getInt = snd . head . filter ((== w) . fst) . (++ [(w, [])]) . foldl s 
       | av == bv = (bv, bl) : merge as bs
       | otherwise = (bv, bl) : merge a bs
 
-qualities :: [Int] -> ([[Int]], [Int])
-qualities items =
-  case subsum 40 id items of
-    [] -> ([], items)
+-- Returns a tuple with:
+--  (Sets of 40 sum items, items left out of combinations)
+qualities :: [(Int, Item)] -> ([[(Int, Item)]], [(Int, Item)])
+qualities qAndItems =
+  case subsum 40 fst qAndItems of
+    [] -> ([], qAndItems)
     set ->
-      let (sset, sitems) = qualities (items \\ set)
-       in (set : sset, sitems)
+      let (sset, sitems) = qualities (qAndItems \\ set)
+      in (set : sset, sitems)
