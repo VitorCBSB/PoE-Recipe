@@ -33,23 +33,33 @@ import Text.Parsec (char, digit, many1, parse)
 import Text.Parsec.Text (Parser)
 import Prelude hiding (error)
 
+newtype Account = Acc T.Text
+  deriving (Generic, Show)
+
+newtype League = L T.Text
+  deriving (Generic, Show)
+
+newtype TabIdx = TI T.Text
+  deriving (Generic, Show)
+
+newtype SessId = SI T.Text
+  deriving (Generic, Show)
+
+instance FromJSON Account
+
+instance FromJSON League
+
+instance FromJSON SessId
+
 data Config = Config
-  { accountName :: T.Text,
-    league :: T.Text,
-    sessId :: T.Text,
+  { accountName :: Account,
+    league :: League,
+    sessId :: SessId,
     stashTabName :: T.Text
   }
   deriving (Generic, Show)
 
 instance FromJSON Config
-
-newtype Account = Acc T.Text
-
-newtype League = L T.Text
-
-newtype TabIdx = TI T.Text
-
-newtype SessId = SI T.Text
 
 data Stash = Stash
   { numTabs :: Int,
@@ -163,15 +173,21 @@ requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) =
             let errorMess =
                   case eitherDecode body of
                     Left e -> "Unknown error: " <> T.pack e <> ". Is your config.json correctly configured?"
-                    Right err -> (message . error) err
-                advice = "\n\nIt's possible your POESESSID is outdated. Try grabbing a new one and trying again."
-             in return (Left $ "Stash could not be parsed: " <> errorMess <> advice)
+                    Right err ->
+                      let advice =
+                            case (code . error) err of
+                              1 -> "\n\nCheck if your account name is correct and try again."
+                              2 -> "\n\nCheck if the league name is correct and try again."
+                              6 -> "\n\nIt's possible your POESESSID is incorrect or outdated. Try grabbing a new one and trying again."
+                              _ -> ""
+                       in (message . error) err <> " (code " <> (T.pack . show) ((code . error) err) <> ")" <> advice
+             in return (Left $ "Stash could not be parsed: " <> errorMess)
           Right stash -> return (Right stash)
 
 getQualityTabItems :: Config -> IO (Either T.Text [Item])
 getQualityTabItems config =
   do
-    initStash <- requestStash (Acc $ accountName config) (L $ league config) (TI "0") (SI $ sessId config)
+    initStash <- requestStash (accountName config) (league config) (TI "0") (sessId config)
     case initStash of
       Left e -> return $ Left e
       Right iniStash ->
@@ -179,7 +195,7 @@ getQualityTabItems config =
           Left e -> return $ Left e
           Right idx ->
             do
-              qualStash <- requestStash (Acc $ accountName config) (L $ league config) (TI $ (T.pack . show) idx) (SI $ sessId config)
+              qualStash <- requestStash (accountName config) (league config) (TI $ (T.pack . show) idx) (sessId config)
               case qualStash of
                 Left e -> return $ Left e
                 Right qualityStash -> return $ Right $ items qualityStash
