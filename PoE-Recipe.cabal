@@ -26,3 +26,6 @@ executable PoE-Recipe
                      , bytestring
                      , lens-aeson
                      , parsec
+                     , gloss
+                     , gloss-juicy
+                     , JuicyPixels

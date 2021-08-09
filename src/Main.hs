@@ -162,9 +162,9 @@ readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json"
 
 requestStash :: Account -> League -> TabIdx -> SessId -> IO (Either T.Text Stash)
-requestStash (Acc acc) (L league_) (TI tabIdx) (SI sessId_) =
+requestStash account league tabIdx sessId =
   do
-    r <- getWith (Main.params acc league_ tabIdx (encodeUtf8 sessId_)) url
+    r <- getWith (Main.params account league tabIdx sessId) url
     case r ^? responseBody of
       Nothing -> return $ Left "Could not fetch stash."
       Just body ->
@@ -236,13 +236,13 @@ getItemQuality item =
 url :: String
 url = "https://www.pathofexile.com/character-window/get-stash-items"
 
-params :: T.Text -> T.Text -> T.Text -> B.ByteString -> Options
-params accountName leagueName tabIdx sessId =
+params :: Account -> League -> TabIdx -> SessId -> Options
+params (Acc accountName) (L leagueName) (TI tabIdx) (SI sessId) =
   defaults & param "accountName" .~ [accountName]
     & param "tabIndex" .~ [tabIdx]
     & param "league" .~ [leagueName]
     & param "tabs" .~ ["1"]
-    & header "Cookie" .~ ["POESESSID=" <> sessId]
+    & header "Cookie" .~ ["POESESSID=" <> encodeUtf8 sessId]
     & header "Referer" .~ ["https://www.pathofexile.com"]
     & checkResponse ?~ \_ _ -> return ()
 
@@ -254,12 +254,12 @@ parseQuality =
     char '%'
     return qual
 
-subsum :: Int -> [Int] -> [Int]
-subsum w = snd . head . filter ((== w) . fst) . (++ [(w, [])]) . foldl s [(0, [])]
+subsum :: Int -> (a -> Int) -> [a] -> [a]
+subsum w getInt = snd . head . filter ((== w) . fst) . (++ [(w, [])]) . foldl s [(0, [])]
   where
     s a x = merge a $ map f a
       where
-        f (a, l) = (a + x, l ++ [x])
+        f (a, l) = (a + getInt x, l ++ [x])
 
     -- keep list of sums sorted and unique
     merge [] a = a
@@ -271,7 +271,7 @@ subsum w = snd . head . filter ((== w) . fst) . (++ [(w, [])]) . foldl s [(0, []
 
 qualities :: [Int] -> ([[Int]], [Int])
 qualities items =
-  case subsum 40 items of
+  case subsum 40 id items of
     [] -> ([], items)
     set ->
       let (sset, sitems) = qualities (items \\ set)
