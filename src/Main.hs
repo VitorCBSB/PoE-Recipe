@@ -3,6 +3,7 @@
 
 module Main where
 
+import qualified Codec.Picture as JP
 import Control.Lens ((&), (.~), (?~), (^?))
 import Control.Monad (unless, void)
 import Data.Aeson
@@ -11,6 +12,7 @@ import Data.Aeson
     eitherDecodeFileStrict',
   )
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List (find, isInfixOf, partition, sort, (\\))
@@ -19,7 +21,10 @@ import Data.Monoid ((<>))
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
+import Data.Text.Lazy (breakOnEnd)
 import GHC.Generics (Generic)
+import Graphics.Gloss
+import Graphics.Gloss.Juicy (fromDynamicImage)
 import Network.Wreq
   ( Options,
     checkResponse,
@@ -29,6 +34,8 @@ import Network.Wreq
     param,
     responseBody,
   )
+import System.Directory (createDirectoryIfMissing, doesFileExist)
+import System.FilePath ((</>), takeDirectory)
 import System.IO (hPutStrLn, stderr)
 import Text.Parsec (char, digit, many1, parse)
 import Text.Parsec.Text (Parser)
@@ -86,6 +93,8 @@ data Item = Item
     properties :: Maybe [Property],
     x :: Int,
     y :: Int,
+    w :: Int,
+    h :: Int,
     icon :: URL
   }
   deriving (Generic, Show, Eq)
@@ -129,54 +138,109 @@ main = do
   putStrLn "Reading config."
   maybeConf <- readConfig
   case maybeConf of
-    Left e -> hPutStrLn stderr $ "Could not read config: " <> e
+    Left e -> do
+      hPutStrLn stderr $ "Could not read config: " <> e
+      exitPrompt
     Right conf ->
       do
         putStrLn "Fetching items from your stash."
         maybeQItems <- getQualityTabItems conf
         case maybeQItems of
-          Left e -> TIO.hPutStrLn stderr $ "Error while retrieving items from stash: " <> e
+          Left e -> do
+            TIO.hPutStrLn stderr $ "Error while retrieving items from stash: " <> e
+            exitPrompt
           Right qItems -> do
-            noQG <- printQualities Gem qItems
-            noQF <- printQualities Flask qItems
-            noQM <- printQualities Map qItems
+            let (noQG, setsG, outG) = optimalQualitySets (filter (itemDeterminer Gem) qItems)
+            let (noQF, setsF, outF) = optimalQualitySets (filter (itemDeterminer Flask) qItems)
+            let (noQM, setsM, outM) = optimalQualitySets (filter (itemDeterminer Map) qItems)
+            printQualities Gem setsG outG
+            printQualities Flask setsF outF
+            printQualities Map setsM outM
             unless (null (noQG ++ noQF ++ noQM)) $
               do
                 putStrLn "The following items have no quality:"
                 mapM_ (TIO.putStrLn . typeLine) (noQG ++ noQF ++ noQM)
-  putStrLn ""
-  putStrLn "Press Enter to exit..."
-  void getChar
+            visualize qItems
+  where
+    exitPrompt = do
+      putStrLn ""
+      putStrLn "Press Enter to exit"
+      void getChar
 
--- Returns no quality items so they can be logged at the end
--- If no quality items of that particular type are found,
--- ignore the no quality ones.
-printQualities :: ItemType -> [Item] -> IO [Item]
-printQualities itemType allItems =
-  if null qs
-    then return []
+visualize :: [Item] -> IO ()
+visualize items = do
+  imgs <- mapM getItemPicture items
+  let itemAndImg = zip items imgs
+  let pics = pictures $ map 
+        (\(item, im) -> Translate (fromIntegral (x item) * 47 - 500) (280 - fromIntegral (y item * 47)) im) itemAndImg
+  let grid = pictures [Color white $ Translate (fromIntegral (x * 47 - 500)) (280 - fromIntegral (y * 47)) (rectangleWire 47 47) | x <- [0..11], y <- [0..11]]
+  display (InWindow "PoE-Recipe" (1080, 664) (0, 0)) black (pictures [grid, pics])
+
+getItemPicture :: Item -> IO Picture
+getItemPicture item = do
+  fileExists <- doesFileExist filePath
+  if fileExists
+    then do
+      bsFile <- B.readFile filePath
+      return $ convertBytesToPicture bsFile
+    else -- Grab image from web and save it.
+    do
+      r <- getWith defaults (T.unpack iconUrl)
+      case r ^? responseBody of
+        Nothing -> return Blank
+        Just body ->
+          do
+            let sBody = BL.toStrict body
+             in case JP.decodeImage sBody of
+                  Left _ -> return Blank
+                  Right _ ->
+                    do
+                      createDirectoryIfMissing True (takeDirectory filePath)
+                      B.writeFile filePath sBody
+                      return $ convertBytesToPicture sBody
+  where
+    imgDir = "img"
+    (U iconUrl) = icon item
+    (_, fileName) = T.breakOnEnd "/" iconUrl
+    filePath = imgDir </> T.unpack fileName
+
+convertBytesToPicture :: B.ByteString -> Picture
+convertBytesToPicture bs =
+  case JP.decodeImage bs of
+    Left _ -> Blank
+    Right img ->
+      fromMaybe Blank (fromDynamicImage img)
+
+printQualities :: ItemType -> [[(Int, Item)]] -> [(Int, Item)] -> IO ()
+printQualities itemType optimalSets leftOut =
+  if null optimalSets && null leftOut
+    then return ()
     else do
       TIO.putStrLn $ qualityCurrency itemType <> " combinations:"
-      let (sets, out) = qualities trueQs
-      mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show (sort $ map fst is)) $ zip [1 ..] (map (: []) twentyQs ++ sets)
+      mapM_ (\(ix, is) -> putStrLn $ "  " ++ show ix ++ ". " ++ show (sort $ map fst is)) $ zip [1 ..] optimalSets
       putStr "Items left out: "
-      print (sort $ map fst out)
+      print (sort $ map fst leftOut)
       putStrLn ""
-      return noQ
-  where
-    (noQ, qs) = partitionQuality $ filter (itemDeterminer itemType) allItems
-    (twentyQs, trueQs) = partition (\i -> fst i >= 20) qs
+      return ()
 
 -- Returns a tuple with: (items without quality, items with quality)
 partitionQuality :: [Item] -> ([Item], [(Int, Item)])
 partitionQuality items =
-  (noQ, qs)
+  partitionEithers $ map qualityCheck items
   where
-    (noQ, qs) = partitionEithers $ map qualityCheck items
     qualityCheck item =
       case getItemQuality item of
         Nothing -> Left item
         Just q -> Right (q, item)
+
+-- (Items without quality, optimal sets, items left out)
+optimalQualitySets :: [Item] -> ([Item], [[(Int, Item)]], [(Int, Item)])
+optimalQualitySets items =
+  (noQ, sets <> map (: []) twentyQs, out)
+  where
+    (noQ, qs) = partitionQuality items
+    (twentyQs, trueQs) = partition (\i -> fst i >= 20) qs
+    (sets, out) = qualities trueQs
 
 readConfig :: IO (Either String Config)
 readConfig = eitherDecodeFileStrict' "config.json"
@@ -297,4 +361,4 @@ qualities qAndItems =
     [] -> ([], qAndItems)
     set ->
       let (sset, sitems) = qualities (qAndItems \\ set)
-      in (set : sset, sitems)
+       in (set : sset, sitems)

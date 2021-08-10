@@ -29,3 +29,5 @@ executable PoE-Recipe
                      , gloss
                      , gloss-juicy
                      , JuicyPixels
+                     , directory
+                     , filepath
