@@ -160,21 +160,42 @@ main = do
               do
                 putStrLn "The following items have no quality:"
                 mapM_ (TIO.putStrLn . typeLine) (noQG ++ noQF ++ noQM)
-            visualize qItems
+            visualize qItems setsG
   where
     exitPrompt = do
       putStrLn ""
       putStrLn "Press Enter to exit"
       void getChar
 
-visualize :: [Item] -> IO ()
-visualize items = do
+fI = fromIntegral
+
+itemX :: Item -> Float -> Float -> Float
+itemX item cellSize offset =
+  (fI (x item) + (fI (w item - 1) * 0.5)) * cellSize + offset
+
+itemY :: Item -> Float -> Float -> Float
+itemY item cellSize origin =
+  origin - ((fI (y item) + (fI (h item - 1) * 0.5)) * cellSize)
+
+fillOptimalGemCell :: Float -> Float -> Float -> [(Int, Item)] -> Picture
+fillOptimalGemCell cellSize xOffset yOrigin gemList =
+  pictures $ map
+    (\(_, item) ->
+      Color green $ Translate (itemX item cellSize xOffset) (itemY item cellSize yOrigin) $ rectangleSolid cellSize cellSize) gemList
+
+visualize :: [Item] -> [[(Int, Item)]] -> IO ()
+visualize items gemSets = do
   imgs <- mapM getItemPicture items
   let itemAndImg = zip items imgs
-  let pics = pictures $ map 
-        (\(item, im) -> Translate (fromIntegral (x item) * 47 - 500) (280 - fromIntegral (y item * 47)) im) itemAndImg
-  let grid = pictures [Color white $ Translate (fromIntegral (x * 47 - 500)) (280 - fromIntegral (y * 47)) (rectangleWire 47 47) | x <- [0..11], y <- [0..11]]
-  display (InWindow "PoE-Recipe" (1080, 664) (0, 0)) black (pictures [grid, pics])
+  let pics = pictures $ map
+        (\(item, im) -> Translate (itemX item cellSize itemsXOffset) (itemY item cellSize itemsYOrigin) im) itemAndImg
+  let grid = pictures [Color white $ Translate (fI x * cellSize + itemsXOffset) (itemsYOrigin - fI y * cellSize) (rectangleWire cellSize cellSize) | x <- [0..11], y <- [0..11]]
+  let displayNums = pictures $ map (fillOptimalGemCell cellSize itemsXOffset itemsYOrigin) gemSets
+  display (InWindow "PoE-Recipe" (568, 568) (0, 0)) black (pictures [grid, pics, displayNums])
+  where
+    itemsXOffset = -258
+    itemsYOrigin = 258
+    cellSize = 47
 
 getItemPicture :: Item -> IO Picture
 getItemPicture item = do
@@ -221,7 +242,6 @@ printQualities itemType optimalSets leftOut =
       putStr "Items left out: "
       print (sort $ map fst leftOut)
       putStrLn ""
-      return ()
 
 -- Returns a tuple with: (items without quality, items with quality)
 partitionQuality :: [Item] -> ([Item], [(Int, Item)])
