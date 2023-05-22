@@ -35,7 +35,7 @@ import Network.Wreq
     responseBody,
   )
 import System.Directory (createDirectoryIfMissing, doesFileExist)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath (takeDirectory, (</>))
 import System.IO (hPutStrLn, stderr)
 import Text.Parsec (char, digit, many1, parse)
 import Text.Parsec.Text (Parser)
@@ -179,17 +179,23 @@ itemY item cellSize origin =
 
 fillOptimalGemCell :: Float -> Float -> Float -> [(Int, Item)] -> Picture
 fillOptimalGemCell cellSize xOffset yOrigin gemList =
-  pictures $ map
-    (\(_, item) ->
-      Color green $ Translate (itemX item cellSize xOffset) (itemY item cellSize yOrigin) $ rectangleSolid cellSize cellSize) gemList
+  pictures $
+    map
+      ( \(_, item) ->
+          Color green $ Translate (itemX item cellSize xOffset) (itemY item cellSize yOrigin) $ rectangleSolid cellSize cellSize
+      )
+      gemList
 
 visualize :: [Item] -> [[(Int, Item)]] -> IO ()
 visualize items gemSets = do
   imgs <- mapM getItemPicture items
   let itemAndImg = zip items imgs
-  let pics = pictures $ map
-        (\(item, im) -> Translate (itemX item cellSize itemsXOffset) (itemY item cellSize itemsYOrigin) im) itemAndImg
-  let grid = pictures [Color white $ Translate (fI x * cellSize + itemsXOffset) (itemsYOrigin - fI y * cellSize) (rectangleWire cellSize cellSize) | x <- [0..11], y <- [0..11]]
+  let pics =
+        pictures $
+          map
+            (\(item, im) -> Translate (itemX item cellSize itemsXOffset) (itemY item cellSize itemsYOrigin) im)
+            itemAndImg
+  let grid = pictures [Color white $ Translate (fI x * cellSize + itemsXOffset) (itemsYOrigin - fI y * cellSize) (rectangleWire cellSize cellSize) | x <- [0 .. 11], y <- [0 .. 11]]
   let displayNums = pictures $ map (fillOptimalGemCell cellSize itemsXOffset itemsYOrigin) gemSets
   display (InWindow "PoE-Recipe" (568, 568) (0, 0)) black (pictures [grid, pics, displayNums])
   where
@@ -342,7 +348,8 @@ url = "https://www.pathofexile.com/character-window/get-stash-items"
 
 params :: Account -> League -> TabIdx -> SessId -> Options
 params (Acc accountName) (L leagueName) (TI tabIdx) (SI sessId) =
-  defaults & param "accountName" .~ [accountName]
+  defaults
+    & param "accountName" .~ [accountName]
     & param "tabIndex" .~ [tabIdx]
     & param "league" .~ [leagueName]
     & param "tabs" .~ ["1"]
