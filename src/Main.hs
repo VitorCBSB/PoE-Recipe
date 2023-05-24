@@ -5,7 +5,7 @@ module Main where
 
 import qualified Codec.Picture as JP
 import Control.Lens ((&), (.~), (?~), (^?))
-import Control.Monad (unless, void)
+import Control.Monad (unless, void, when)
 import Data.Aeson
   ( FromJSON,
     eitherDecode,
@@ -63,7 +63,8 @@ data Config = Config
   { accountName :: Account,
     league :: League,
     sessId :: SessId,
-    stashTabName :: T.Text
+    stashTabName :: T.Text,
+    enableVisualization :: Bool
   }
   deriving (Generic, Show)
 
@@ -160,7 +161,8 @@ main = do
               do
                 putStrLn "The following items have no quality:"
                 mapM_ (TIO.putStrLn . typeLine) (noQG ++ noQF ++ noQM)
-            visualize qItems setsG
+            when (enableVisualization conf)
+              (visualize qItems setsG)
   where
     exitPrompt = do
       putStrLn ""
