@@ -161,8 +161,10 @@ main = do
               do
                 putStrLn "The following items have no quality:"
                 mapM_ (TIO.putStrLn . typeLine) (noQG ++ noQF ++ noQM)
-            when (enableVisualization conf)
-              (visualize qItems setsG)
+            if enableVisualization conf then
+              visualize qItems setsG
+            else
+              exitPrompt
   where
     exitPrompt = do
       putStrLn ""
